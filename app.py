@@ -1,8 +1,6 @@
 import streamlit as st
 import pandas as pd
-import pytesseract
 from PIL import Image
-pytesseract.pytesseract.tesseract_cmd = r"C:\Inventory\New folder\doc\tesseract.exe"
 file = "inventory.xlsx"
 
 # Load Excel
