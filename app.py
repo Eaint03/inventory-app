@@ -37,10 +37,19 @@ if uploaded_file:
     image.save(img_bytes, format="PNG")
     img_bytes = img_bytes.getvalue()
 
-    # 🔥 STEP 3: OCR API (improved settings)
-    response = requests.post(
+ # Resize image
+max_size = (800, 800)
+image.thumbnail(max_size)
+
+# Convert to compressed JPEG
+img_bytes_io = io.BytesIO()
+image.save(img_bytes_io, format="JPEG", quality=70)
+img_bytes = img_bytes_io.getvalue()
+
+# OCR API
+response = requests.post(
     "https://api.ocr.space/parse/image",
-    files={"file": ("image.png", img_bytes, "image/png")},
+    files={"file": ("image.jpg", img_bytes, "image/jpeg")},
     data={
         "apikey": "helloworld",
         "language": "eng",
