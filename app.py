@@ -1,4 +1,3 @@
-
 import streamlit as st
 import pandas as pd
 from PIL import Image
@@ -25,45 +24,41 @@ if uploaded_file:
     # 🔥 STEP 1: Convert to grayscale
     image = image.convert("L")
 
-    # 🔥 STEP 2: Improve contrast (VERY IMPORTANT)
+    # 🔥 STEP 2: Improve contrast
     img_array = np.array(image)
     img_array = np.clip(img_array * 1.5, 0, 255).astype(np.uint8)
     image = Image.fromarray(img_array)
 
+    # 🔥 STEP 3: Resize (FIX for file size)
+    max_size = (800, 800)
+    image.thumbnail(max_size)
+
     st.image(image, caption="Processed Image", use_column_width=True)
 
-    # Convert image to bytes
-    img_bytes = io.BytesIO()
-    image.save(img_bytes, format="PNG")
-    img_bytes = img_bytes.getvalue()
+    # 🔥 STEP 4: Convert to compressed JPEG
+    img_bytes_io = io.BytesIO()
+    image.save(img_bytes_io, format="JPEG", quality=70)
+    img_bytes = img_bytes_io.getvalue()
 
- # Resize image
-max_size = (800, 800)
-image.thumbnail(max_size)
+    # 🔥 STEP 5: OCR API (FIXED FILE FORMAT)
+    response = requests.post(
+        "https://api.ocr.space/parse/image",
+        files={"file": ("image.jpg", img_bytes, "image/jpeg")},
+        data={
+            "apikey": "helloworld",
+            "language": "eng",
+            "OCREngine": 2,
+            "scale": True,
+            "detectOrientation": True
+        }
+    )
 
-# Convert to compressed JPEG
-img_bytes_io = io.BytesIO()
-image.save(img_bytes_io, format="JPEG", quality=70)
-img_bytes = img_bytes_io.getvalue()
-
-# OCR API
-response = requests.post(
-    "https://api.ocr.space/parse/image",
-    files={"file": ("image.jpg", img_bytes, "image/jpeg")},
-    data={
-        "apikey": "helloworld",
-        "language": "eng",
-        "OCREngine": 2,
-        "scale": True,
-        "detectOrientation": True
-    }
-)
     result = response.json()
 
-    # 🔥 DEBUG (you can remove later)
+    # 🔥 DEBUG
     st.write("🔧 OCR Raw Result:", result)
 
-    # 🔥 STEP 4: Safe extraction
+    # 🔥 STEP 6: Extract text safely
     parsed = result.get("ParsedResults")
 
     if parsed and parsed[0].get("ParsedText"):
@@ -79,10 +74,9 @@ response = requests.post(
     else:
         st.warning("⚠️ OCR could not detect text clearly. Please enter manually.")
 
-    # 🔥 STEP 5: SMART EXTRACTION
-
+    # 🔥 STEP 7: SMART EXTRACTION
     if detected_text:
-        # Quantity (look for "Quantity 100")
+        # Quantity
         qty_match = re.search(r'Quantity\s*(\d+)', detected_text, re.IGNORECASE)
         if qty_match:
             qty_auto = int(qty_match.group(1))
@@ -91,13 +85,13 @@ response = requests.post(
             if num_match:
                 qty_auto = int(num_match.group())
 
-        # Component (look for keyword lines)
+        # Component
         for line in detected_text.split("\n"):
             if any(word in line.upper() for word in ["DIODE", "RESISTOR", "CAPACITOR"]):
                 component_auto = line.strip()
                 break
 
-        # Location (pattern like PB51-09 or A1)
+        # Location
         loc_match = re.search(r'[A-Z]{1,3}\d{1,3}[-]?\d*', detected_text)
         if loc_match:
             location_auto = loc_match.group()
