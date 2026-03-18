@@ -39,17 +39,16 @@ if uploaded_file:
 
     # 🔥 STEP 3: OCR API (improved settings)
     response = requests.post(
-        "https://api.ocr.space/parse/image",
-        files={"file": ("image.png", img_bytes, "image/png")}
-        data={
-            "apikey": "helloworld",
-            "language": "eng",
-            "OCREngine": 2,
-            "scale": True,
-            "detectOrientation": True
-        }
-    )
-
+    "https://api.ocr.space/parse/image",
+    files={"file": ("image.png", img_bytes, "image/png")},
+    data={
+        "apikey": "helloworld",
+        "language": "eng",
+        "OCREngine": 2,
+        "scale": True,
+        "detectOrientation": True
+    }
+)
     result = response.json()
 
     # 🔥 DEBUG (you can remove later)
