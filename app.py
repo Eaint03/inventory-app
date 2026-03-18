@@ -15,7 +15,7 @@ uploaded_file = st.file_uploader("Upload image", type=["jpg", "png"])
 
 detected_text = ""
 component_auto = ""
-qty_auto = 0
+qty_auto = 1
 location_auto = ""
 
 if uploaded_file:
