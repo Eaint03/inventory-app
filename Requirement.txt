@@ -2,6 +2,4 @@ streamlit
 pandas
 Pillow
 openpyxl
-easyocr
-torch
-opencv-python-headless
+requests
