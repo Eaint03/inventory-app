@@ -5,22 +5,20 @@ import requests
 import io
 import re
 import numpy as np
-import gspread
-from oauth2client.service_account import ServiceAccountCredentials
 
 # =========================
-# 🔗 GOOGLE SHEETS SETUP
+# 🔗 GOOGLE SHEETS FUNCTION
 # =========================
-scope = [
-    "https://spreadsheets.google.com/feeds",
-    "https://www.googleapis.com/auth/drive"
-]
+def save_to_sheet(component, qty, location):
+    url = https://script.google.com/a/macros/nexwah.com/s/AKfycbwHdeF4x2zDhiRbxAORM2HIrkZxODV8ByVO-mL14OPD3SKDKHOCaSJSE6OnC04duUwMhA/exec
 
-creds_dict = st.secrets["gcp_service_account"]
-creds = ServiceAccountCredentials.from_json_keyfile_dict(creds_dict, scope)
-client = gspread.authorize(creds)
+    data = {
+        "component": component,
+        "quantity": qty,
+        "location": location
+    }
 
-sheet = client.open("Inventory").sheet1
+    requests.post(url, json=data)
 
 # =========================
 # 🎯 TITLE
@@ -82,7 +80,7 @@ if uploaded_file:
     if parsed and parsed[0].get("ParsedText"):
         detected_text = parsed[0]["ParsedText"]
 
-    # Clean feedback (no raw text)
+    # Clean feedback (NO raw text)
     if detected_text:
         st.success("✔️ Details detected automatically")
     else:
@@ -128,5 +126,5 @@ location = st.text_input("Location (e.g. A1)", location_auto)
 # 💾 SAVE TO GOOGLE SHEET
 # =========================
 if st.button("Add to Inventory"):
-    sheet.append_row([component, qty, location])
+    save_to_sheet(component, qty, location)
     st.success("✅ Saved to Google Sheet!")
