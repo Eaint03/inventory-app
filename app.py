@@ -2,156 +2,122 @@ import streamlit as st
 import pandas as pd
 from PIL import Image
 import requests
-import os
+import io
 import re
+import numpy as np
 
-# =========================
-# 📁 Excel setup
-# =========================
-file = "inventory.xlsx"
-
-if os.path.exists(file):
-    df = pd.read_excel(file)
-else:
-    df = pd.DataFrame(columns=["Component", "Quantity", "Location"])
-
-# =========================
-# 🔍 OCR FUNCTION
-# =========================
-def extract_text(image_file):
-    url = "https://api.ocr.space/parse/image"
-    
-    payload = {
-        "apikey": "helloworld",
-        "language": "eng"
-    }
-
-    files = {
-        "file": image_file.getvalue()
-    }
-
-    response = requests.post(url, files=files, data=payload)
-    result = response.json()
-
-    try:
-        return result["ParsedResults"][0]["ParsedText"]
-    except:
-        return ""
-
-# =========================
-# 🎯 UI TITLE
-# =========================
+# Title
 st.title("📦 Smart Inventory System")
 
-# =========================
-# 📸 UPLOAD
-# =========================
-uploaded_file = st.file_uploader("📸 Upload Component Image", type=["jpg", "png", "jpeg"])
+# Upload section
+st.subheader("📸 Take or Upload Component Image")
+uploaded_file = st.file_uploader("Upload image", type=["jpg", "png"])
+
+detected_text = ""
+component_auto = ""
+qty_auto = 1
+location_auto = ""
 
 if uploaded_file:
     image = Image.open(uploaded_file)
-    st.image(image, caption="Preview", use_column_width=True)
 
-    # =========================
-    # 🔍 OCR WITH LOADING
-    # =========================
-    with st.spinner("🔍 Detecting from image..."):
-        text = extract_text(uploaded_file)
+    # 🔥 STEP 1: Convert to grayscale
+    image = image.convert("L")
 
-    text_upper = text.upper()
+    # 🔥 STEP 2: Improve contrast
+    img_array = np.array(image)
+    img_array = np.clip(img_array * 1.5, 0, 255).astype(np.uint8)
+    image = Image.fromarray(img_array)
 
-    # =========================
-    # 🔍 COMPONENT DETECTION
-    # =========================
-    component = ""
+    # 🔥 STEP 3: Resize (FIX for file size)
+    max_size = (800, 800)
+    image.thumbnail(max_size)
 
-    # Detect Zener diode (DigiKey label specific)
-    if "ZENER" in text_upper or "DIODE" in text_upper:
-        voltage_match = re.search(r'(\d{1,3})\s?V', text_upper)
-        
-        if voltage_match:
-            component = f"Zener Diode {voltage_match.group(1)}V"
+    st.image(image, caption="Processed Image", use_column_width=True)
+
+    # 🔥 STEP 4: Convert to compressed JPEG
+    img_bytes_io = io.BytesIO()
+    image.save(img_bytes_io, format="JPEG", quality=70)
+    img_bytes = img_bytes_io.getvalue()
+
+    # 🔥 STEP 5: OCR API (FIXED FILE FORMAT)
+    response = requests.post(
+        "https://api.ocr.space/parse/image",
+        files={"file": ("image.jpg", img_bytes, "image/jpeg")},
+        data={
+            "apikey": "helloworld",
+            "language": "eng",
+            "OCREngine": 2,
+            "scale": True,
+            "detectOrientation": True
+        }
+    )
+
+    result = response.json()
+
+    # 🔥 DEBUG
+    st.write("🔧 OCR Raw Result:", result)
+
+    # 🔥 STEP 6: Extract text safely
+    parsed = result.get("ParsedResults")
+
+    if parsed and parsed[0].get("ParsedText"):
+        detected_text = parsed[0]["ParsedText"]
+    else:
+        detected_text = ""
+
+    # Show OCR result
+    st.subheader("🔍 OCR Detected Text")
+
+    if detected_text:
+        st.text(detected_text)
+    else:
+        st.warning("⚠️ OCR could not detect text clearly. Please enter manually.")
+
+    # 🔥 STEP 7: SMART EXTRACTION
+    if detected_text:
+        # Quantity
+        qty_match = re.search(r'Quantity\s*(\d+)', detected_text, re.IGNORECASE)
+        if qty_match:
+            qty_auto = int(qty_match.group(1))
         else:
-            component = "Zener Diode"
+            num_match = re.search(r'\b\d+\b', detected_text)
+            if num_match:
+                qty_auto = int(num_match.group())
 
-    # Detect IC
-    elif "IC" in text_upper:
-        component = "IC Chip"
-
-    # Detect resistor
-    elif "RESISTOR" in text_upper:
-        component = "Resistor"
-
-    # Detect capacitor
-    elif "CAPACITOR" in text_upper:
-        component = "Capacitor"
-
-    # Fallback (leave empty for user edit)
-    if component == "":
-        component = ""
-
-    # =========================
-    # 🔢 QUANTITY DETECTION
-    # =========================
-    qty = 1
-
-    # Case 1: "Quantity 100"
-    match = re.search(r'QUANTITY\s*(\d+)', text_upper)
-    if match:
-        qty = int(match.group(1))
-
-    # Case 2: number below "Quantity"
-    if qty == 1:
-        lines = text_upper.split("\n")
-        for i, line in enumerate(lines):
-            if "QUANTITY" in line:
-                if i + 1 < len(lines):
-                    next_line = lines[i + 1].strip()
-                    if next_line.isdigit():
-                        qty = int(next_line)
-                        break
-
-    # Case 3: smart fallback
-    if qty == 1:
-        numbers = re.findall(r'\b\d{2,4}\b', text_upper)
-        
-        for num in numbers:
-            num_int = int(num)
-            if 10 <= num_int <= 1000:
-                qty = num_int
+        # Component
+        for line in detected_text.split("\n"):
+            if any(word in line.upper() for word in ["DIODE", "RESISTOR", "CAPACITOR"]):
+                component_auto = line.strip()
                 break
 
-    # =========================
-    # 🎯 CLEAN UI
-    # =========================
-    st.subheader("✔️ Detected Result")
+        # Location
+        loc_match = re.search(r'[A-Z]{1,3}\d{1,3}[-]?\d*', detected_text)
+        if loc_match:
+            location_auto = loc_match.group()
 
-    col1, col2 = st.columns(2)
+# Input section
+st.subheader("✍️ Confirm / Edit Details")
 
-    with col1:
-        component = st.text_input("Component", value=component)
+component = st.text_input("Component Name", component_auto)
+qty = st.number_input("Quantity", min_value=1, value=qty_auto)
+location = st.text_input("Location (e.g. A1)", location_auto)
 
-    with col2:
-        qty = st.number_input("Quantity", min_value=1, value=qty)
+# Save button
+if st.button("Add to Inventory"):
+    data = pd.DataFrame({
+        "Component": [component],
+        "Quantity": [qty],
+        "Location": [location]
+    })
 
-    location = st.text_input("Location (e.g. A1)")
+    try:
+        existing = pd.read_excel("inventory.xlsx")
+        updated = pd.concat([existing, data], ignore_index=True)
+    except:
+        updated = data
 
-    # =========================
-    # 💾 SAVE
-    # =========================
-    if st.button("💾 Save"):
-        new_data = pd.DataFrame([[component, qty, location]],
-                                columns=["Component", "Quantity", "Location"])
-        
-        df = pd.concat([df, new_data], ignore_index=True)
-        df.to_excel(file, index=False)
+    updated.to_excel("inventory.xlsx", index=False)
 
-        st.success("Saved successfully!")
-        st.rerun()
-
-# =========================
-# 📋 INVENTORY TABLE
-# =========================
-st.divider()
-st.subheader("📋 Inventory List")
-st.dataframe(df)
+    st.success("✅ Saved to Inventory!")
+    st.dataframe(updated)
