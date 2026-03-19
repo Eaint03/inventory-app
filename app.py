@@ -55,8 +55,6 @@ if uploaded_file:
 
     result = response.json()
 
-    # 🔥 DEBUG
-    st.write("🔧 OCR Raw Result:", result)
 
     # 🔥 STEP 6: Extract text safely
     parsed = result.get("ParsedResults")
@@ -70,7 +68,7 @@ if uploaded_file:
     st.subheader("🔍 OCR Detected Text")
 
     if detected_text:
-        st.text(detected_text)
+        st.text("System can detect text clearly.")
     else:
         st.warning("⚠️ OCR could not detect text clearly. Please enter manually.")
 
