@@ -5,6 +5,22 @@ import requests
 import io
 import re
 import numpy as np
+import gspread
+from oauth2client.service_account import ServiceAccountCredentials
+
+
+# Google Sheets connection
+scope = [
+    "https://spreadsheets.google.com/feeds",
+    "https://www.googleapis.com/auth/drive"
+]
+
+creds_dict = st.secrets["gcp_service_account"]
+
+creds = ServiceAccountCredentials.from_json_keyfile_dict(creds_dict, scope)
+client = gspread.authorize(creds)
+
+sheet = client.open("Inventory").sheet1
 
 # Title
 st.title("📦 Smart Inventory System")
@@ -109,13 +125,7 @@ if st.button("Add to Inventory"):
         "Location": [location]
     })
 
-    try:
-        existing = pd.read_excel("inventory.xlsx")
-        updated = pd.concat([existing, data], ignore_index=True)
-    except:
-        updated = data
+if st.button("Add to Inventory"):
+    sheet.append_row([component, qty, location])
+    st.success("✅ Saved to Google Sheet!")
 
-    updated.to_excel("inventory.xlsx", index=False)
-
-    st.success("✅ Saved to Inventory!")
-    st.dataframe(updated)
