@@ -3,22 +3,26 @@ import pandas as pd
 from PIL import Image
 import requests
 import os
+import re
 
-# Excel file
+# =========================
+# 📁 Excel setup
+# =========================
 file = "inventory.xlsx"
 
-# Load or create Excel
 if os.path.exists(file):
     df = pd.read_excel(file)
 else:
     df = pd.DataFrame(columns=["Component", "Quantity", "Location"])
 
-# OCR FUNCTION (API)
+# =========================
+# 🔍 OCR FUNCTION
+# =========================
 def extract_text(image_file):
     url = "https://api.ocr.space/parse/image"
     
     payload = {
-        "apikey": "helloworld",  # free demo key
+        "apikey": "helloworld",
         "language": "eng"
     }
 
@@ -34,68 +38,88 @@ def extract_text(image_file):
     except:
         return ""
 
-# Title
+# =========================
+# 🎯 UI TITLE
+# =========================
 st.title("📦 Smart Inventory System")
 
-# Upload
+# =========================
+# 📸 UPLOAD
+# =========================
 uploaded_file = st.file_uploader("📸 Upload Component Image", type=["jpg", "png", "jpeg"])
 
 if uploaded_file:
     image = Image.open(uploaded_file)
     st.image(image, caption="Preview", use_column_width=True)
 
-    # OCR (hidden)
-    text = extract_text(uploaded_file)
+    # =========================
+    # 🔍 OCR WITH LOADING
+    # =========================
+    with st.spinner("🔍 Detecting from image..."):
+        text = extract_text(uploaded_file)
+
     text_upper = text.upper()
 
     # =========================
     # 🔍 COMPONENT DETECTION
     # =========================
-    import re
-
     component = ""
 
-    if "ZENER" in text_upper:
-        voltage_match = re.search(r'\d+\s?V', text_upper)
+    # Detect Zener diode (DigiKey label specific)
+    if "ZENER" in text_upper or "DIODE" in text_upper:
+        voltage_match = re.search(r'(\d{1,3})\s?V', text_upper)
         
         if voltage_match:
-            component = f"Zener Diode {voltage_match.group().replace(' ', '')}"
+            component = f"Zener Diode {voltage_match.group(1)}V"
         else:
             component = "Zener Diode"
 
+    # Detect IC
+    elif "IC" in text_upper:
+        component = "IC Chip"
+
+    # Detect resistor
     elif "RESISTOR" in text_upper:
         component = "Resistor"
 
+    # Detect capacitor
     elif "CAPACITOR" in text_upper:
         component = "Capacitor"
 
+    # Fallback (leave empty for user edit)
     if component == "":
-        component = "Electronic Component"
+        component = ""
 
     # =========================
     # 🔢 QUANTITY DETECTION
     # =========================
     qty = 1
 
-    lines = text.split("\n")
+    # Case 1: "Quantity 100"
+    match = re.search(r'QUANTITY\s*(\d+)', text_upper)
+    if match:
+        qty = int(match.group(1))
 
-    for i, line in enumerate(lines):
-        if "QUANTITY" in line.upper():
-            if i + 1 < len(lines):
-                next_line = lines[i + 1].strip()
-                if next_line.isdigit():
-                    qty = int(next_line)
-                    break
-
-    # Fallback
+    # Case 2: number below "Quantity"
     if qty == 1:
-        for line in lines:
-            line = line.strip()
-            if line.isdigit():
-                num = int(line)
-                if 1 <= num <= 1000:
-                    qty = num
-                    break
+        lines = text_upper.split("\n")
+        for i, line in enumerate(lines):
+            if "QUANTITY" in line:
+                if i + 1 < len(lines):
+                    next_line = lines[i + 1].strip()
+                    if next_line.isdigit():
+                        qty = int(next_line)
+                        break
+
+    # Case 3: smart fallback
+    if qty == 1:
+        numbers = re.findall(r'\b\d{2,4}\b', text_upper)
+        
+        for num in numbers:
+            num_int = int(num)
+            if 10 <= num_int <= 1000:
+                qty = num_int
+                break
 
     # =========================
     # 🎯 CLEAN UI
@@ -112,6 +136,9 @@ if uploaded_file:
 
     location = st.text_input("Location (e.g. A1)")
 
+    # =========================
+    # 💾 SAVE
+    # =========================
     if st.button("💾 Save"):
         new_data = pd.DataFrame([[component, qty, location]],
                                 columns=["Component", "Quantity", "Location"])
@@ -120,7 +147,11 @@ if uploaded_file:
         df.to_excel(file, index=False)
 
         st.success("Saved successfully!")
-# Show inventory
+        st.rerun()
+
+# =========================
+# 📋 INVENTORY TABLE
+# =========================
 st.divider()
 st.subheader("📋 Inventory List")
 st.dataframe(df)
