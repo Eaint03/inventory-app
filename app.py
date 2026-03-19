@@ -8,124 +8,125 @@ import numpy as np
 import gspread
 from oauth2client.service_account import ServiceAccountCredentials
 
-
-# Google Sheets connection
+# =========================
+# 🔗 GOOGLE SHEETS SETUP
+# =========================
 scope = [
     "https://spreadsheets.google.com/feeds",
     "https://www.googleapis.com/auth/drive"
 ]
 
 creds_dict = st.secrets["gcp_service_account"]
-
 creds = ServiceAccountCredentials.from_json_keyfile_dict(creds_dict, scope)
 client = gspread.authorize(creds)
 
 sheet = client.open("Inventory").sheet1
 
-# Title
+# =========================
+# 🎯 TITLE
+# =========================
 st.title("📦 Smart Inventory System")
 
-# Upload section
+# =========================
+# 📸 UPLOAD
+# =========================
 st.subheader("📸 Take or Upload Component Image")
-uploaded_file = st.file_uploader("Upload image", type=["jpg", "png"])
+uploaded_file = st.file_uploader("Upload image", type=["jpg", "png", "jpeg"])
 
-detected_text = ""
 component_auto = ""
 qty_auto = 1
 location_auto = ""
 
+# =========================
+# 🔍 PROCESS IMAGE + OCR
+# =========================
 if uploaded_file:
     image = Image.open(uploaded_file)
 
-    # 🔥 STEP 1: Convert to grayscale
+    # Convert to grayscale
     image = image.convert("L")
 
-    # 🔥 STEP 2: Improve contrast
+    # Improve contrast
     img_array = np.array(image)
     img_array = np.clip(img_array * 1.5, 0, 255).astype(np.uint8)
     image = Image.fromarray(img_array)
 
-    # 🔥 STEP 3: Resize (FIX for file size)
-    max_size = (800, 800)
-    image.thumbnail(max_size)
+    # Resize
+    image.thumbnail((800, 800))
 
     st.image(image, caption="Processed Image", use_column_width=True)
 
-    # 🔥 STEP 4: Convert to compressed JPEG
+    # Convert to JPEG
     img_bytes_io = io.BytesIO()
     image.save(img_bytes_io, format="JPEG", quality=70)
     img_bytes = img_bytes_io.getvalue()
 
-    # 🔥 STEP 5: OCR API (FIXED FILE FORMAT)
-    response = requests.post(
-        "https://api.ocr.space/parse/image",
-        files={"file": ("image.jpg", img_bytes, "image/jpeg")},
-        data={
-            "apikey": "helloworld",
-            "language": "eng",
-            "OCREngine": 2,
-            "scale": True,
-            "detectOrientation": True
-        }
-    )
+    # OCR API
+    with st.spinner("🔍 Detecting from image..."):
+        response = requests.post(
+            "https://api.ocr.space/parse/image",
+            files={"file": ("image.jpg", img_bytes, "image/jpeg")},
+            data={
+                "apikey": "helloworld",
+                "language": "eng",
+                "OCREngine": 2,
+                "scale": True,
+                "detectOrientation": True
+            }
+        )
 
     result = response.json()
-
-
-    # 🔥 STEP 6: Extract text safely
     parsed = result.get("ParsedResults")
 
+    detected_text = ""
     if parsed and parsed[0].get("ParsedText"):
         detected_text = parsed[0]["ParsedText"]
-    else:
-        detected_text = ""
 
-    # Show OCR result
-    st.subheader("🔍 OCR Detected Text")
-
+    # Clean feedback (no raw text)
     if detected_text:
-        st.text("System can detect text clearly.")
+        st.success("✔️ Details detected automatically")
     else:
-        st.warning("⚠️ OCR could not detect text clearly. Please enter manually.")
+        st.warning("⚠️ Unable to detect clearly, please enter manually")
 
-    # 🔥 STEP 7: SMART EXTRACTION
+    # =========================
+    # 🔍 SMART EXTRACTION
+    # =========================
     if detected_text:
         # Quantity
         qty_match = re.search(r'Quantity\s*(\d+)', detected_text, re.IGNORECASE)
         if qty_match:
             qty_auto = int(qty_match.group(1))
         else:
-            num_match = re.search(r'\b\d+\b', detected_text)
-            if num_match:
-                qty_auto = int(num_match.group())
+            numbers = re.findall(r'\b\d{2,4}\b', detected_text)
+            for num in numbers:
+                num_int = int(num)
+                if 10 <= num_int <= 1000:
+                    qty_auto = num_int
+                    break
 
         # Component
         for line in detected_text.split("\n"):
-            if any(word in line.upper() for word in ["DIODE", "RESISTOR", "CAPACITOR"]):
+            if any(word in line.upper() for word in ["DIODE", "RESISTOR", "CAPACITOR", "IC"]):
                 component_auto = line.strip()
                 break
 
-        # Location
+        # Location (optional)
         loc_match = re.search(r'[A-Z]{1,3}\d{1,3}[-]?\d*', detected_text)
         if loc_match:
             location_auto = loc_match.group()
 
-# Input section
+# =========================
+# ✍️ INPUT SECTION
+# =========================
 st.subheader("✍️ Confirm / Edit Details")
 
-component = st.text_input("Component Name", component_auto)
+component = st.text_input("Component Name", component_auto, placeholder="Auto-detected")
 qty = st.number_input("Quantity", min_value=1, value=qty_auto)
 location = st.text_input("Location (e.g. A1)", location_auto)
 
-# Save button
-if st.button("Add to Inventory"):
-    data = pd.DataFrame({
-        "Component": [component],
-        "Quantity": [qty],
-        "Location": [location]
-    })
-
+# =========================
+# 💾 SAVE TO GOOGLE SHEET
+# =========================
 if st.button("Add to Inventory"):
     sheet.append_row([component, qty, location])
     st.success("✅ Saved to Google Sheet!")
-
