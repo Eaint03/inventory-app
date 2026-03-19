@@ -10,7 +10,7 @@ import numpy as np
 # 🔗 GOOGLE SHEETS FUNCTION
 # =========================
 def save_to_sheet(component, qty, location):
-    url = https://script.google.com/a/macros/nexwah.com/s/AKfycbwHdeF4x2zDhiRbxAORM2HIrkZxODV8ByVO-mL14OPD3SKDKHOCaSJSE6OnC04duUwMhA/exec
+    url = "https://script.google.com/a/macros/nexwah.com/s/AKfycbwHdeF4x2zDhiRbxAORM2HIrkZxODV8ByVO-mL14OPD3SKDKHOCaSJSE6OnC04duUwMhA/exec"
 
     data = {
         "component": component,
