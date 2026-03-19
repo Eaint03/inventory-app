@@ -46,20 +46,60 @@ if uploaded_file:
 
     # OCR (hidden)
     text = extract_text(uploaded_file)
+    text_upper = text.upper()
 
-    # 🔥 SIMPLE SMART DETECTION
+    # =========================
+    # 🔍 COMPONENT DETECTION
+    # =========================
+    import re
+
     component = ""
-    if "DIODE" in text.upper():
-        component = "Zener Diode 18V"
 
+    if "ZENER" in text_upper:
+        voltage_match = re.search(r'\d+\s?V', text_upper)
+        
+        if voltage_match:
+            component = f"Zener Diode {voltage_match.group().replace(' ', '')}"
+        else:
+            component = "Zener Diode"
+
+    elif "RESISTOR" in text_upper:
+        component = "Resistor"
+
+    elif "CAPACITOR" in text_upper:
+        component = "Capacitor"
+
+    if component == "":
+        component = "Electronic Component"
+
+    # =========================
+    # 🔢 QUANTITY DETECTION
+    # =========================
     qty = 1
-    for word in text.split():
-        if word.isdigit():
-            qty = int(word)
 
-    st.divider()
+    lines = text.split("\n")
 
-    # Clean UI
+    for i, line in enumerate(lines):
+        if "QUANTITY" in line.upper():
+            if i + 1 < len(lines):
+                next_line = lines[i + 1].strip()
+                if next_line.isdigit():
+                    qty = int(next_line)
+                    break
+
+    # Fallback
+    if qty == 1:
+        for line in lines:
+            line = line.strip()
+            if line.isdigit():
+                num = int(line)
+                if 1 <= num <= 1000:
+                    qty = num
+                    break
+
+    # =========================
+    # 🎯 CLEAN UI
+    # =========================
     st.subheader("✔️ Detected Result")
 
     col1, col2 = st.columns(2)
@@ -72,7 +112,6 @@ if uploaded_file:
 
     location = st.text_input("Location (e.g. A1)")
 
-    # Save
     if st.button("💾 Save"):
         new_data = pd.DataFrame([[component, qty, location]],
                                 columns=["Component", "Quantity", "Location"])
@@ -81,7 +120,6 @@ if uploaded_file:
         df.to_excel(file, index=False)
 
         st.success("Saved successfully!")
-
 # Show inventory
 st.divider()
 st.subheader("📋 Inventory List")
