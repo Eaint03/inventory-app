@@ -1,5 +1,4 @@
 import streamlit as st
-import pandas as pd
 from PIL import Image
 import requests
 import io
@@ -10,7 +9,7 @@ import numpy as np
 # 🔗 GOOGLE SHEETS FUNCTION
 # =========================
 def save_to_sheet(component, qty, location):
-    url = "https://script.google.com/a/macros/nexwah.com/s/AKfycbwHdeF4x2zDhiRbxAORM2HIrkZxODV8ByVO-mL14OPD3SKDKHOCaSJSE6OnC04duUwMhA/exec"
+    url = "https://script.google.com/macros/s/AKfycbzsX55cEf1cHBXWPgBz-ypLiLz8rZ06IgKZp7edJBsyvwpAzY0riHamRz-ay8S1whV15w/exec"
 
     data = {
         "component": component,
@@ -18,7 +17,8 @@ def save_to_sheet(component, qty, location):
         "location": location
     }
 
-    requests.post(url, json=data)
+    response = requests.post(url, json=data)
+    return response.text
 
 # =========================
 # 🎯 TITLE
@@ -61,25 +61,26 @@ if uploaded_file:
 
     # OCR API
     with st.spinner("🔍 Detecting from image..."):
-    response = requests.post(
-        "https://api.ocr.space/parse/image",
-        files={"file": ("image.jpg", img_bytes, "image/jpeg")},
-        data={
-            "apikey": "helloworld",
-            "language": "eng",
-            "OCREngine": 2,
-            "scale": True,
-            "detectOrientation": True
-        }
-    )
-    result = response.json()
-    parsed = result.get("ParsedResults")
+        response = requests.post(
+            "https://api.ocr.space/parse/image",
+            files={"file": ("image.jpg", img_bytes, "image/jpeg")},
+            data={
+                "apikey": "helloworld",
+                "language": "eng",
+                "OCREngine": 2,
+                "scale": True,
+                "detectOrientation": True
+            }
+        )
+
+        result = response.json()
+        parsed = result.get("ParsedResults")
 
     detected_text = ""
     if parsed and parsed[0].get("ParsedText"):
         detected_text = parsed[0]["ParsedText"]
 
-    # Clean feedback (NO raw text)
+    # Clean feedback
     if detected_text:
         st.success("✔️ Details detected automatically")
     else:
@@ -107,7 +108,7 @@ if uploaded_file:
                 component_auto = line.strip()
                 break
 
-        # Location (optional)
+        # Location
         loc_match = re.search(r'[A-Z]{1,3}\d{1,3}[-]?\d*', detected_text)
         if loc_match:
             location_auto = loc_match.group()
@@ -122,8 +123,12 @@ qty = st.number_input("Quantity", min_value=1, value=qty_auto)
 location = st.text_input("Location (e.g. A1)", location_auto)
 
 # =========================
-# 💾 SAVE TO GOOGLE SHEET
+# 💾 SAVE
 # =========================
 if st.button("Add to Inventory"):
-    save_to_sheet(component, qty, location)
-    st.success("✅ Saved to Google Sheet!")
+    response = save_to_sheet(component, qty, location)
+
+    if "Success" in response:
+        st.success("✅ Saved to Google Sheet!")
+    else:
+        st.error("❌ Failed to save. Check your Google Script.")
