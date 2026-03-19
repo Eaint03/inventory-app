@@ -61,18 +61,17 @@ if uploaded_file:
 
     # OCR API
     with st.spinner("🔍 Detecting from image..."):
-        response = requests.post(
-            "https://api.ocr.space/parse/image",
-            files={"file": ("image.jpg", img_bytes, "image/jpeg")},
-            data={
-                "apikey": "helloworld",
-                "language": "eng",
-                "OCREngine": 2,
-                "scale": True,
-                "detectOrientation": True
-            }
-        )
-
+    response = requests.post(
+        "https://api.ocr.space/parse/image",
+        files={"file": ("image.jpg", img_bytes, "image/jpeg")},
+        data={
+            "apikey": "helloworld",
+            "language": "eng",
+            "OCREngine": 2,
+            "scale": True,
+            "detectOrientation": True
+        }
+    )
     result = response.json()
     parsed = result.get("ParsedResults")
 
