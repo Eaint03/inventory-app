@@ -4,3 +4,5 @@ Pillow
 openpyxl
 requests
 numpy
+gspread
+oauth2client
