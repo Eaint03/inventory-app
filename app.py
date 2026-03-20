@@ -6,27 +6,7 @@ import re
 import numpy as np
 
 # =========================
-# PAGE CONTROL
-# =========================
-if "page" not in st.session_state:
-    st.session_state.page = "home"
-
-# =========================
-# 🏠 HOME PAGE
-# =========================
-if st.session_state.page == "home":
-    st.title("📦 Smart Inventory System")
-
-    st.write("Choose what you want to do:")
-
-    if st.button("➕ Add Inventory"):
-        st.session_state.page = "add"
-
-    if st.button("📤 Take Inventory"):
-        st.session_state.page = "take"
-
-# =========================
-# 🔗 GOOGLE SHEETS FUNCTION
+# FUNCTION
 # =========================
 def save_to_sheet(component, qty, location):
     url = "https://script.google.com/macros/s/AKfycbzsX55cEf1cHBXWPgBz-ypLiLz8rZ06IgKZp7edJBsyvwpAzY0riHamRz-ay8S1whV15w/exec"
@@ -41,20 +21,37 @@ def save_to_sheet(component, qty, location):
     return response.text
 
 # =========================
-# ➕ ADD PAGE (FIXED)
+# PAGE CONTROL
+# =========================
+if "page" not in st.session_state:
+    st.session_state.page = "home"
+
+# =========================
+# HOME
+# =========================
+if st.session_state.page == "home":
+    st.title("📦 Smart Inventory System")
+
+    if st.button("➕ Add Inventory"):
+        st.session_state.page = "add"
+
+    if st.button("📤 Take Inventory"):
+        st.session_state.page = "take"
+
+# =========================
+# ADD PAGE
 # =========================
 elif st.session_state.page == "add":
 
     if st.button("⬅ Back"):
         st.session_state.page = "home"
 
-    # 🎯 TITLE
     st.title("📦 Smart Inventory System")
 
-    # 📸 UPLOAD
-    st.subheader("📸 Take or Upload Component Image")
+    # 📸 UPLOAD (MISSING BEFORE)
     uploaded_file = st.file_uploader("Upload image", type=["jpg", "png", "jpeg"])
 
+    # DEFAULT VALUES (MISSING BEFORE)
     component_auto = ""
     qty_auto = 1
     location_auto = ""
@@ -100,7 +97,7 @@ elif st.session_state.page == "add":
         if detected_text:
             st.success("✔️ Details detected automatically")
         else:
-            st.warning("⚠️ Unable to detect clearly, please enter manually")
+            st.warning("⚠️ Unable to detect clearly")
 
         if detected_text:
             qty_match = re.search(r'Quantity\s*(\d+)', detected_text, re.IGNORECASE)
