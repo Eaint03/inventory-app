@@ -26,29 +26,29 @@ def save_to_sheet(component, qty, location):
 if "page" not in st.session_state:
     st.session_state.page = "home"
 
-
 # =========================
 # HOME Screen
 # =========================
 if st.session_state.page == "home":
-    st.title("Welcome to smart Inventory System")
+    st.title("Welcome to Smart Inventory System")
 
-    st.write("")  # spacing
+    st.write("")
     st.write("")
 
-    # Create 3 columns → middle one is center
     col1, col2, col3 = st.columns([1, 2, 1])
 
     with col2:
         st.markdown("### Choose Action")
 
-       if st.button("➕ Add Inventory", use_container_width=True):
-    st.session_state.page = "add"
-    st.rerun()
+        if st.button("➕ Add Inventory", use_container_width=True):
+            st.session_state.page = "add"
+            st.rerun()
 
-       if st.button("📤 Take Inventory", use_container_width=True):
-    st.session_state.page = "take"
-    st.rerun()
+        st.write("")
+
+        if st.button("📤 Take Inventory", use_container_width=True):
+            st.session_state.page = "take"
+            st.rerun()
 
         
 # =========================
