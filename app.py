@@ -29,24 +29,37 @@ if "page" not in st.session_state:
 # =========================
 # HOME
 # =========================
+# =========================
+# HOME
+# =========================
 if st.session_state.page == "home":
-    st.title("📦 Smart Inventory System")
+    st.title("Welcome to smart Inventory System")
 
-    if st.button("➕ Add Inventory"):
-        st.session_state.page = "add"
+    st.write("")  # spacing
+    st.write("")
 
-    if st.button("📤 Take Inventory"):
-        st.session_state.page = "take"
+    # Create 3 columns → middle one is center
+    col1, col2, col3 = st.columns([1, 2, 1])
 
+    with col2:
+        st.markdown("### Choose Action")
+
+        if st.button("➕ Add Inventory", use_container_width=True):
+            st.session_state.page = "add"
+
+        st.write("")  # space between buttons
+
+        if st.button("📤 Take Inventory", use_container_width=True):
+            st.session_state.page = "take"
 # =========================
 # ADD PAGE
 # =========================
 elif st.session_state.page == "add":
 
-    if st.button("⬅ Back"):
+    if st.button(" Back"):
         st.session_state.page = "home"
 
-    st.title("📦 Smart Inventory System")
+    st.title("Adding Inventory")
 
     # 📸 UPLOAD (MISSING BEFORE)
     uploaded_file = st.file_uploader("Upload image", type=["jpg", "png", "jpeg"])
