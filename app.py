@@ -26,11 +26,9 @@ def save_to_sheet(component, qty, location):
 if "page" not in st.session_state:
     st.session_state.page = "home"
 
+
 # =========================
-# HOME
-# =========================
-# =========================
-# HOME
+# HOME Screen
 # =========================
 if st.session_state.page == "home":
     st.title("Welcome to smart Inventory System")
