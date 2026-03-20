@@ -6,6 +6,26 @@ import re
 import numpy as np
 
 # =========================
+# PAGE CONTROL
+# =========================
+if "page" not in st.session_state:
+    st.session_state.page = "home"
+
+# =========================
+# 🏠 HOME PAGE
+# =========================
+if st.session_state.page == "home":
+    st.title("📦 Smart Inventory System")
+
+    st.write("Choose what you want to do:")
+
+    if st.button("➕ Add Inventory"):
+        st.session_state.page = "add"
+
+    if st.button("📤 Take Inventory"):
+        st.session_state.page = "take"
+
+# =========================
 # 🔗 GOOGLE SHEETS FUNCTION
 # =========================
 def save_to_sheet(component, qty, location):
@@ -21,114 +41,93 @@ def save_to_sheet(component, qty, location):
     return response.text
 
 # =========================
-# 🎯 TITLE
+# ➕ ADD PAGE (FIXED)
 # =========================
-st.title("📦 Smart Inventory System")
+elif st.session_state.page == "add":
 
-# =========================
-# 📸 UPLOAD
-# =========================
-st.subheader("📸 Take or Upload Component Image")
-uploaded_file = st.file_uploader("Upload image", type=["jpg", "png", "jpeg"])
+    if st.button("⬅ Back"):
+        st.session_state.page = "home"
 
-component_auto = ""
-qty_auto = 1
-location_auto = ""
+    # 🎯 TITLE
+    st.title("📦 Smart Inventory System")
 
-# =========================
-# 🔍 PROCESS IMAGE + OCR
-# =========================
-if uploaded_file:
-    image = Image.open(uploaded_file)
+    # 📸 UPLOAD
+    st.subheader("📸 Take or Upload Component Image")
+    uploaded_file = st.file_uploader("Upload image", type=["jpg", "png", "jpeg"])
 
-    # Convert to grayscale
-    image = image.convert("L")
+    component_auto = ""
+    qty_auto = 1
+    location_auto = ""
 
-    # Improve contrast
-    img_array = np.array(image)
-    img_array = np.clip(img_array * 1.5, 0, 255).astype(np.uint8)
-    image = Image.fromarray(img_array)
+    # 🔍 OCR
+    if uploaded_file:
+        image = Image.open(uploaded_file)
 
-    # Resize
-    image.thumbnail((800, 800))
+        image = image.convert("L")
 
-    st.image(image, caption="Processed Image", use_column_width=True)
+        img_array = np.array(image)
+        img_array = np.clip(img_array * 1.5, 0, 255).astype(np.uint8)
+        image = Image.fromarray(img_array)
 
-    # Convert to JPEG
-    img_bytes_io = io.BytesIO()
-    image.save(img_bytes_io, format="JPEG", quality=70)
-    img_bytes = img_bytes_io.getvalue()
+        image.thumbnail((800, 800))
 
-    # OCR API
-    with st.spinner("🔍 Detecting from image..."):
-        response = requests.post(
-            "https://api.ocr.space/parse/image",
-            files={"file": ("image.jpg", img_bytes, "image/jpeg")},
-            data={
-                "apikey": "helloworld",
-                "language": "eng",
-                "OCREngine": 2,
-                "scale": True,
-                "detectOrientation": True
-            }
-        )
+        st.image(image, caption="Processed Image", use_column_width=True)
 
-        result = response.json()
-        parsed = result.get("ParsedResults")
+        img_bytes_io = io.BytesIO()
+        image.save(img_bytes_io, format="JPEG", quality=70)
+        img_bytes = img_bytes_io.getvalue()
 
-    detected_text = ""
-    if parsed and parsed[0].get("ParsedText"):
-        detected_text = parsed[0]["ParsedText"]
+        with st.spinner("🔍 Detecting from image..."):
+            response = requests.post(
+                "https://api.ocr.space/parse/image",
+                files={"file": ("image.jpg", img_bytes, "image/jpeg")},
+                data={
+                    "apikey": "helloworld",
+                    "language": "eng",
+                    "OCREngine": 2,
+                    "scale": True,
+                    "detectOrientation": True
+                }
+            )
 
-    # Clean feedback
-    if detected_text:
-        st.success("✔️ Details detected automatically")
-    else:
-        st.warning("⚠️ Unable to detect clearly, please enter manually")
+            result = response.json()
+            parsed = result.get("ParsedResults")
 
-    # =========================
-    # 🔍 SMART EXTRACTION
-    # =========================
-    if detected_text:
-        # Quantity
-        qty_match = re.search(r'Quantity\s*(\d+)', detected_text, re.IGNORECASE)
-        if qty_match:
-            qty_auto = int(qty_match.group(1))
+        detected_text = ""
+        if parsed and parsed[0].get("ParsedText"):
+            detected_text = parsed[0]["ParsedText"]
+
+        if detected_text:
+            st.success("✔️ Details detected automatically")
         else:
-            numbers = re.findall(r'\b\d{2,4}\b', detected_text)
-            for num in numbers:
-                num_int = int(num)
-                if 10 <= num_int <= 1000:
-                    qty_auto = num_int
+            st.warning("⚠️ Unable to detect clearly, please enter manually")
+
+        if detected_text:
+            qty_match = re.search(r'Quantity\s*(\d+)', detected_text, re.IGNORECASE)
+            if qty_match:
+                qty_auto = int(qty_match.group(1))
+
+            for line in detected_text.split("\n"):
+                if any(word in line.upper() for word in ["DIODE", "RESISTOR", "CAPACITOR", "IC"]):
+                    component_auto = line.strip()
                     break
 
-        # Component
-        for line in detected_text.split("\n"):
-            if any(word in line.upper() for word in ["DIODE", "RESISTOR", "CAPACITOR", "IC"]):
-                component_auto = line.strip()
-                break
+            loc_match = re.search(r'[A-Z]{1,3}\d{1,3}[-]?\d*', detected_text)
+            if loc_match:
+                location_auto = loc_match.group()
 
-        # Location
-        loc_match = re.search(r'[A-Z]{1,3}\d{1,3}[-]?\d*', detected_text)
-        if loc_match:
-            location_auto = loc_match.group()
+    # ✍️ INPUT
+    st.subheader("✍️ Confirm / Edit Details")
 
-# =========================
-# ✍️ INPUT SECTION
-# =========================
-st.subheader("✍️ Confirm / Edit Details")
+    component = st.text_input("Component Name", component_auto)
+    qty = st.number_input("Quantity", min_value=1, value=qty_auto)
+    location = st.text_input("Location", location_auto)
 
-component = st.text_input("Component Name", component_auto, placeholder="Auto-detected")
-qty = st.number_input("Quantity", min_value=1, value=qty_auto)
-location = st.text_input("Location (e.g. A1)", location_auto)
+    # 💾 SAVE
+    if st.button("Add to Inventory"):
+        response = save_to_sheet(component, qty, location)
 
-# =========================
-# 💾 SAVE
-# =========================
-if st.button("Add to Inventory"):
-    response = save_to_sheet(component, qty, location)
-
-    if "Success" in response:
-        st.success("✅ Saved to Google Sheet!")
-    else:
-        st.error("❌ Failed to save. Check your Google Script.")
+        if "Success" in response:
+            st.success("✅ Saved to Google Sheet!")
+        else:
+            st.error("❌ Failed to save.")
