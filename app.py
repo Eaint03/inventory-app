@@ -42,13 +42,15 @@ if st.session_state.page == "home":
     with col2:
         st.markdown("### Choose Action")
 
-        if st.button("➕ Add Inventory", use_container_width=True):
-            st.session_state.page = "add"
+       if st.button("➕ Add Inventory", use_container_width=True):
+    st.session_state.page = "add"
+    st.rerun()
 
-        st.write("")  # space between buttons
+       if st.button("📤 Take Inventory", use_container_width=True):
+    st.session_state.page = "take"
+    st.rerun()
 
-        if st.button("📤 Take Inventory", use_container_width=True):
-            st.session_state.page = "take"
+        
 # =========================
 # ADD PAGE
 # =========================
@@ -56,6 +58,7 @@ elif st.session_state.page == "add":
 
     if st.button(" Back"):
         st.session_state.page = "home"
+        st.rerun()
 
     st.title("Adding Inventory")
 
