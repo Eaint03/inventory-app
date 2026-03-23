@@ -5,22 +5,27 @@ import io
 import re
 
 # =========================
-# GOOGLE SHEETS
+# PAGE STATE
 # =========================
-def save_to_sheet(component, qty, location):
+if "page" not in st.session_state:
+    st.session_state.page = "home"
+
+# =========================
+# GOOGLE SHEET
+# =========================
+def save_to_sheet(part, qty):
     url = "https://script.google.com/macros/s/AKfycbzsX55cEf1cHBXWPgBz-ypLiLz8rZ06IgKZp7edJBsyvwpAzY0riHamRz-ay8S1whV15w/exec"
 
     data = {
-        "component": component,
+        "component": part,  # using part as main key
         "quantity": qty,
-        "location": location
+        "location": ""
     }
 
     requests.post(url, json=data)
 
-
 # =========================
-# OCR FUNCTION (STABLE)
+# OCR
 # =========================
 def run_ocr(image):
 
@@ -45,27 +50,15 @@ def run_ocr(image):
 
     return None
 
-
 # =========================
-# EXTRACTION LOGIC
+# STRONG EXTRACTION (ONLY P/N + QTY)
 # =========================
 def extract_info(text):
 
     lines = [l.strip() for l in text.split("\n") if l.strip()]
 
-    component = ""
     part_number = ""
     quantity = ""
-
-    # ===== COMPONENT =====
-    for line in lines:
-        upper = line.upper()
-        if any(x in upper for x in ["DIODE", "EEPROM", "RESISTOR", "CAPACITOR", "IC"]):
-            component = line
-            break
-
-    if not component:
-        component = lines[0]
 
     # ===== PART NUMBER =====
     for i in range(len(lines)):
@@ -73,18 +66,20 @@ def extract_info(text):
 
         if "MFG" in line or "P/N" in line or "PN" in line:
 
+            # same line
             match = re.search(r"[A-Z0-9\-,]{6,}", lines[i])
             if match:
                 part_number = match.group()
                 break
 
+            # next line
             if i + 1 < len(lines):
                 match = re.search(r"[A-Z0-9\-,]{6,}", lines[i+1])
                 if match:
                     part_number = match.group()
                     break
 
-    # fallback
+    # fallback (longest code-like string)
     if not part_number:
         matches = re.findall(r"[A-Z0-9\-,]{8,}", text)
         if matches:
@@ -107,50 +102,77 @@ def extract_info(text):
                     quantity = match.group()
                     break
 
-    # fallback
+    # fallback (avoid big invoice numbers)
     if not quantity:
-        nums = re.findall(r"\b\d{1,4}\b", text)
+        nums = re.findall(r"\b\d{1,3}\b", text)
         if nums:
             quantity = max(nums, key=int)
 
-    return component, part_number, quantity
-
+    return part_number, quantity
 
 # =========================
-# UI
+# HOME PAGE
 # =========================
-st.set_page_config(page_title="Smart Inventory", layout="centered")
+if st.session_state.page == "home":
 
-st.title("📦 Smart Inventory System")
+    st.title("Welcome to Smart Inventory System")
 
-st.subheader("📷 Take Photo")
+    st.write("")
 
-image_file = st.camera_input("Take a picture")
+    if st.button("➕ Add Inventory"):
+        st.session_state.page = "add"
+        st.rerun()
 
-if image_file:
+    if st.button("📤 Take Inventory"):
+        st.session_state.page = "take"
+        st.rerun()
 
-    image = Image.open(image_file)
-    st.image(image, caption="Captured Image", use_column_width=True)
+# =========================
+# ADD PAGE
+# =========================
+elif st.session_state.page == "add":
 
-    if st.button("🔍 Scan & Extract"):
+    if st.button("Back"):
+        st.session_state.page = "home"
+        st.rerun()
 
-        with st.spinner("Reading label..."):
-            text = run_ocr(image)
+    st.title("➕ Add Inventory")
 
-        if not text:
-            st.error("❌ OCR failed. Try clearer image.")
-        else:
-            st.success("✅ Text detected")
+    image_file = st.camera_input("Take Photo")
 
-            st.text_area("Detected Text", text, height=200)
+    if image_file:
 
-            component, part, qty = extract_info(text)
+        image = Image.open(image_file)
+        st.image(image, use_column_width=True)
 
-            st.subheader("📌 Extracted Data")
-            st.write("Component:", component)
-            st.write("Part Number:", part)
-            st.write("Quantity:", qty)
+        if st.button("Scan"):
 
-            if st.button("💾 Save to Inventory"):
-                save_to_sheet(component, qty, "")
-                st.success("Saved to Google Sheets!")
+            with st.spinner("Reading label..."):
+                text = run_ocr(image)
+
+            if not text:
+                st.error("❌ OCR failed")
+            else:
+                st.success("Text detected")
+
+                part, qty = extract_info(text)
+
+                st.subheader("Result")
+                st.write("Part Number:", part)
+                st.write("Quantity:", qty)
+
+                if st.button("Save"):
+                    save_to_sheet(part, qty)
+                    st.success("Saved!")
+
+# =========================
+# TAKE PAGE
+# =========================
+elif st.session_state.page == "take":
+
+    if st.button("Back"):
+        st.session_state.page = "home"
+        st.rerun()
+
+    st.title("📤 Take Inventory")
+    st.write("Coming soon")
