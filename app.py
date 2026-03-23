@@ -1,6 +1,6 @@
 import streamlit as st
 import requests
-from PIL import Image
+from PIL import Image, ImageEnhance, ImageFilter
 import io
 import re
 
@@ -17,12 +17,25 @@ def save_to_sheet(part, qty):
     url = "https://script.google.com/macros/s/AKfycbzsX55cEf1cHBXWPgBz-ypLiLz8rZ06IgKZp7edJBsyvwpAzY0riHamRz-ay8S1whV15w/exec"
 
     data = {
-        "component": part,  # using part as main key
+        "component": part,
         "quantity": qty,
         "location": ""
     }
 
-    requests.post(url, json=data)
+    response = requests.post(url, json=data)
+    return response.text
+
+
+# =========================
+# IMAGE PREPROCESSING
+# =========================
+def preprocess_image(image):
+    image = image.convert("L")  # grayscale
+    enhancer = ImageEnhance.Contrast(image)
+    image = enhancer.enhance(2)
+    image = image.filter(ImageFilter.SHARPEN)
+    return image
+
 
 # =========================
 # OCR
@@ -50,74 +63,78 @@ def run_ocr(image):
 
     return None
 
+
 # =========================
-# STRONG EXTRACTION (ONLY P/N + QTY)
+# CLEAN OCR TEXT
+# =========================
+def clean_text(text):
+    text = text.upper()
+    text = text.replace("O", "0")
+    text = text.replace("I", "1")
+    text = text.replace("S", "5")
+    return text
+
+
+# =========================
+# EXTRACT DATA
 # =========================
 def extract_info(text):
 
-    lines = [l.strip() for l in text.split("\n") if l.strip()]
+    part = ""
+    qty = ""
 
-    part_number = ""
-    quantity = ""
+    # PART NUMBER
+    part_match = re.search(r"(P/N|PN|MFG)[^\n]*", text)
+    if part_match:
+        line = part_match.group()
+        match = re.search(r"[A-Z0-9\-]{6,}", line)
+        if match:
+            part = match.group()
 
-    # ===== PART NUMBER =====
-    for i in range(len(lines)):
-        line = lines[i].upper()
-
-        if "MFG" in line or "P/N" in line or "PN" in line:
-
-            # same line
-            match = re.search(r"[A-Z0-9\-,]{6,}", lines[i])
-            if match:
-                part_number = match.group()
-                break
-
-            # next line
-            if i + 1 < len(lines):
-                match = re.search(r"[A-Z0-9\-,]{6,}", lines[i+1])
-                if match:
-                    part_number = match.group()
-                    break
-
-    # fallback (longest code-like string)
-    if not part_number:
-        matches = re.findall(r"[A-Z0-9\-,]{8,}", text)
+    if not part:
+        matches = re.findall(r"[A-Z0-9\-]{8,}", text)
         if matches:
-            part_number = sorted(matches, key=len, reverse=True)[0]
+            part = sorted(matches, key=len, reverse=True)[0]
 
-    # ===== QUANTITY =====
-    for i in range(len(lines)):
-        line = lines[i].upper()
+    # QUANTITY
+    qty_match = re.search(r"(QTY|QUANTITY)[^\d]*(\d+)", text)
+    if qty_match:
+        qty = qty_match.group(2)
 
-        if "QTY" in line or "QUANTITY" in line:
-
-            match = re.search(r"\d+", lines[i])
-            if match:
-                quantity = match.group()
-                break
-
-            if i + 1 < len(lines):
-                match = re.search(r"\d+", lines[i+1])
-                if match:
-                    quantity = match.group()
-                    break
-
-    # fallback (avoid big invoice numbers)
-    if not quantity:
+    if not qty:
         nums = re.findall(r"\b\d{1,3}\b", text)
         if nums:
-            quantity = max(nums, key=int)
+            qty = max(nums, key=int)
 
-    return part_number, quantity
+    return part, qty
+
+
+# =========================
+# VALIDATION
+# =========================
+def validate(part, qty):
+
+    if not part or len(part) < 6:
+        return False
+
+    if not re.match(r"[A-Z0-9\-]+$", part):
+        return False
+
+    if not qty.isdigit():
+        return False
+
+    if int(qty) <= 0 or int(qty) > 10000:
+        return False
+
+    return True
+
 
 # =========================
 # HOME PAGE
 # =========================
 if st.session_state.page == "home":
 
-    st.title("Welcome to Smart Inventory System")
-
-    st.write("")
+    st.title("Smart Inventory System")
 
     if st.button("➕ Add Inventory"):
         st.session_state.page = "add"
@@ -126,6 +143,7 @@ if st.session_state.page == "home":
     if st.button("📤 Take Inventory"):
         st.session_state.page = "take"
         st.rerun()
+
 
 # =========================
 # ADD PAGE
@@ -143,27 +161,36 @@ elif st.session_state.page == "add":
     if image_file:
 
         image = Image.open(image_file)
-        st.image(image, use_column_width=True)
+        st.image(image, caption="Captured")
 
         if st.button("Scan"):
 
-            with st.spinner("Reading label..."):
-                text = run_ocr(image)
+            # PREPROCESS
+            processed = preprocess_image(image)
+
+            # OCR
+            text = run_ocr(processed)
 
             if not text:
-                st.error("❌ OCR failed")
+                st.error("❌ OCR failed — retake photo")
             else:
-                st.success("Text detected")
+
+                text = clean_text(text)
 
                 part, qty = extract_info(text)
 
-                st.subheader("Result")
-                st.write("Part Number:", part)
-                st.write("Quantity:", qty)
+                if validate(part, qty):
 
-                if st.button("Save"):
-                    save_to_sheet(part, qty)
-                    st.success("Saved!")
+                    st.success("✅ Valid Result")
+                    st.write("Part Number:", part)
+                    st.write("Quantity:", qty)
+
+                    response = save_to_sheet(part, qty)
+                    st.write("Saved:", response)
+
+                else:
+                    st.error("❌ Invalid detection — please retake photo")
+
 
 # =========================
 # TAKE PAGE
@@ -174,5 +201,4 @@ elif st.session_state.page == "take":
         st.session_state.page = "home"
         st.rerun()
 
-    st.title("📤 Take Inventory")
-    st.write("Coming soon")
+    st.title("📤 Take Inventory (Coming Soon)")
